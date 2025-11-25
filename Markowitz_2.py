@@ -70,7 +70,22 @@ class MyPortfolio:
         """
         TODO: Complete Task 4 Below
         """
+    
+        # 1. 計算 lookback 期間的動能（過去 lookback 天累積報酬）
+        momentum = (1 + self.returns[assets]).rolling(self.lookback).apply(np.prod, raw=True) - 1
         
+        # 2. 每天挑選前 3 名（momentum 最強的 sector）
+        top3 = momentum.rank(axis=1, ascending=False) <= 3
+
+        # 3. 權重 = 平均分配到前 3 名（例如 1/3）
+        weights = top3.div(top3.sum(axis=1), axis=0)
+
+        # 4. 填進 portfolio_weights
+        self.portfolio_weights[assets] = weights
+
+        # SPY 欄位保持 0
+        self.portfolio_weights[self.exclude] = 0
+
         
         """
         TODO: Complete Task 4 Above

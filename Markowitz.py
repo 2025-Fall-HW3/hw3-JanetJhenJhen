@@ -49,9 +49,8 @@ Problem 1:
 Implement an equal weighting strategy as dataframe "eqw". Please do "not" include SPY.
 """
 
-
 class EqualWeightPortfolio:
-    def __init__(self, exclude):
+    def __init__(self, exclude="SPY"):
         self.exclude = exclude
 
     def calculate_weights(self):
@@ -62,6 +61,10 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
+
+        weights = 1 / len(assets)
+        self.portfolio_weights[assets] = weights
+
 
         """
         TODO: Complete Task 1 Above
@@ -99,7 +102,7 @@ Implement a risk parity strategy as dataframe "rp". Please do "not" include SPY.
 
 
 class RiskParityPortfolio:
-    def __init__(self, exclude, lookback=50):
+    def __init__(self, exclude="SPY", lookback=50):
         self.exclude = exclude
         self.lookback = lookback
 
@@ -109,16 +112,46 @@ class RiskParityPortfolio:
 
         # Calculate the portfolio weights
         self.portfolio_weights = pd.DataFrame(index=df.index, columns=df.columns)
-
         """
         TODO: Complete Task 2 Below
-        """
+        """# 1. Iterate through the index, starting after the lookback period
+        for i in range(self.lookback +1, len(df.index)):
+            # Get the current date/index label
+            current_date = df.index[i]
+            
+            # 2. Define the lookback window (slice of returns data)
+            # The slice goes from the index (i - self.lookback) up to (but not including) the current index i.
+            # However, for volatility calculation based on returns *up to* the current day,
+            # we typically include the data point at index i.
+            lookback_window = df_returns.iloc[i - self.lookback : i ] 
 
+            # 3. Calculate the standard deviation (volatility) over the lookback window
+            # We calculate the std for only the assets in our portfolio
+            std_dev = lookback_window[assets].std()
+            
+            # 4. Calculate the inverse volatility weights (1 / std_dev)
+            # Replace any resulting 'inf' (from division by zero) with 0
+            inverse_volatility = (1 / std_dev).replace(np.inf, 0)
+            
+            # 5. Normalize the weights
+            sum_inverse_volatility = inverse_volatility.sum()
+            
+            if sum_inverse_volatility > 0:
+                normalized_weights = inverse_volatility / sum_inverse_volatility
+            else:
+                # If sum is zero, assign zero weights to all assets
+                normalized_weights = pd.Series(0.0, index=assets)
 
+            # 6. Assign the calculated weights to the current date in the DataFrame
+            self.portfolio_weights.loc[current_date, assets] = normalized_weights
+            
+            # 7. Set the weight of the excluded asset to 0 for the current date
+            self.portfolio_weights.loc[current_date, self.exclude] = 0.0
 
         """
         TODO: Complete Task 2 Above
         """
+
 
         self.portfolio_weights.ffill(inplace=True)
         self.portfolio_weights.fillna(0, inplace=True)
@@ -145,6 +178,7 @@ class RiskParityPortfolio:
         return self.portfolio_weights, self.portfolio_returns
 
 
+
 """
 Problem 3:
 
@@ -153,7 +187,7 @@ Implement a Markowitz strategy as dataframe "mv". Please do "not" include SPY.
 
 
 class MeanVariancePortfolio:
-    def __init__(self, exclude, lookback=50, gamma=0):
+    def __init__(self, exclude="SPY", lookback=50, gamma=0):
         self.exclude = exclude
         self.lookback = lookback
         self.gamma = gamma
@@ -187,11 +221,21 @@ class MeanVariancePortfolio:
                 """
                 TODO: Complete Task 3 Below
                 """
+                
+                w = model.addMVar(n, lb=0.0, name="w")
+
+                model.addConstr(w.sum() == 1, name="budget")
+
+                lin_term = w @ mu
+
+                quad_term = w @ Sigma @ w
+
+                model.setObjective(lin_term - gamma * 0.5 * quad_term, gp.GRB.MAXIMIZE)
 
                 # Sample Code: Initialize Decision w and the Objective
                 # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
+                # w = model.addMVar(n, name="w", ub=1)
+                # model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
 
                 """
                 TODO: Complete Task 3 Above
@@ -245,6 +289,7 @@ class MeanVariancePortfolio:
 if __name__ == "__main__":
     # Import grading system (protected file in GitHub Classroom)
     from grader import AssignmentJudge
+
 
     parser = argparse.ArgumentParser(
         description="Introduction to Fintech Assignment 3 Part 1"
